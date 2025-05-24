@@ -85,6 +85,22 @@ public class OktaConstants {
     public static final String OKTA_TYPE = "Okta";
     public static final String CID = "cid";
 
+    public static final String INTERNAL_SSL_CONTEXT_ENABLED = "enableInternalSSLContext";
+
+    /**
+     * Constant class used to define SSL context related constants.
+     */
+    public static final class SSLProperties {
+
+        public static final String TRUSTSTORE = "javax.net.ssl.trustStore";
+        public static final String TRUSTSTORE_PASSWORD = "javax.net.ssl.trustStorePassword";
+        public static final String TRUSTSTORE_TYPE = "javax.net.ssl.trustStoreType";
+
+        private SSLProperties() {
+
+        }
+    }
+
     OktaConstants() {
     }
 }

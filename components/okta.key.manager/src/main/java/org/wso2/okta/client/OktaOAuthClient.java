@@ -36,6 +36,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.StatusLine;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
@@ -68,6 +69,14 @@ import org.wso2.okta.client.model.OktaError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -77,6 +86,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 
 /**
  * This class provides the implementation to use "Okta" for managing
@@ -543,6 +554,42 @@ public class OktaOAuthClient extends AbstractKeyManager {
     }
 
     /**
+     * This method is used to create a custom SSL Context instead of using the default
+     *
+     * @return The custom SSLContext
+     * @throws KeyStoreException Throws a KeyStoreException
+     * @throws NoSuchAlgorithmException Throws a NoSuchAlgorithmException
+     * @throws CertificateException Throws a CertificateException
+     * @throws IOException Throws a IOException
+     * @throws KeyManagementException Throws a KeyManagementException
+     */
+    private static SSLContext createCustomSSLContext()
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException,
+            KeyManagementException {
+        String trustStorePath = System.getProperty(OktaConstants.SSLProperties.TRUSTSTORE);
+        String trustStorePassword = System.getProperty(OktaConstants.SSLProperties.TRUSTSTORE_PASSWORD);
+        String trustStoreType = System.getProperty(OktaConstants.SSLProperties.TRUSTSTORE_TYPE);
+        if (trustStorePath == null || trustStorePassword == null) {
+            throw new IllegalArgumentException("Truststore properties are not properly set.");
+        }
+        if (trustStoreType == null) {
+            trustStoreType = "JKS";
+        }
+        KeyStore trustStore = KeyStore.getInstance(trustStoreType);
+        // Load Truststore
+        try (InputStream is = Files.newInputStream(Paths.get(trustStorePath))) {
+            trustStore.load(is, trustStorePassword.toCharArray());
+        }
+        // Initialize TrustManagerFactory
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+        // Create SSL context
+        SSLContext context = SSLContext.getInstance("TLS");
+        context.init(null, tmf.getTrustManagers(), new SecureRandom());
+        return context;
+    }
+
+    /**
      * Gets an access token.
      *
      * @param clientId     clientId of the oauth client.
@@ -555,7 +602,22 @@ public class OktaOAuthClient extends AbstractKeyManager {
                                                                       List<NameValuePair> parameters) throws
             APIManagementException {
 
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+        SSLContext sslContext;
+        boolean isInternalSSLContextEnabled = Boolean.parseBoolean(
+                System.getProperty(OktaConstants.INTERNAL_SSL_CONTEXT_ENABLED));
+        HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+        if (isInternalSSLContextEnabled) {
+            // Load custom SSL context
+            try {
+                sslContext = createCustomSSLContext();
+                SSLConnectionSocketFactory sslSocketFactory = new SSLConnectionSocketFactory(sslContext);
+                httpClientBuilder.setSSLSocketFactory(sslSocketFactory);
+            } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException |
+                    KeyManagementException e) {
+                log.error("Failed to initialize custom SSL context", e);
+            }
+        }
+        try (CloseableHttpClient httpClient = httpClientBuilder.build()) {
             String tokenEndpoint = (String) configuration.getParameter(APIConstants.KeyManager.TOKEN_ENDPOINT);
             HttpPost httpPost = new HttpPost(tokenEndpoint);
             httpPost.setEntity(new UrlEncodedFormEntity(parameters));
