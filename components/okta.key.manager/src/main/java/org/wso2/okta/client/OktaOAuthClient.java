@@ -37,7 +37,6 @@ import org.apache.http.StatusLine;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.wso2.carbon.apimgt.api.APIManagementException;
 import org.wso2.carbon.apimgt.api.ErrorItem;
@@ -47,6 +46,7 @@ import org.wso2.carbon.apimgt.api.model.*;
 import org.wso2.carbon.apimgt.impl.APIConstants;
 import org.wso2.carbon.apimgt.impl.AbstractKeyManager;
 import org.wso2.carbon.apimgt.impl.kmclient.KeyManagerClientException;
+import org.wso2.carbon.apimgt.impl.utils.APIUtil;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
@@ -561,8 +561,8 @@ public class OktaOAuthClient extends AbstractKeyManager {
                                                                       List<NameValuePair> parameters) throws
             APIManagementException {
 
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
-            String tokenEndpoint = (String) configuration.getParameter(APIConstants.KeyManager.TOKEN_ENDPOINT);
+        String tokenEndpoint = (String) configuration.getParameter(APIConstants.KeyManager.TOKEN_ENDPOINT);
+        try (CloseableHttpClient httpClient = (CloseableHttpClient) APIUtil.getHttpClient(tokenEndpoint)) {
             HttpPost httpPost = new HttpPost(tokenEndpoint);
             httpPost.setEntity(new UrlEncodedFormEntity(parameters));
             String encodedCredentials = getEncodedCredentials(clientId, clientSecret);
